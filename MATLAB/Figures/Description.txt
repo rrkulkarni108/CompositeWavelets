@@ -1,0 +1,10 @@
+Composite Matrices Figure Description
+
+(1) Product Matrices
+
+(2) Diagonal Block Matrices
+
+(3) Kronecker Product Matrices
+
+(4) Complex - all including Similarity
+
