@@ -7,13 +7,19 @@
 % (3) Denoised Barbara image using single wavelet basis (bases can be chosen by user- we choose most symmetric wavelets)
 % (4) Denoise Barbara image using product wavelet bases (bases chosen by user)
 
+% Also outputs to console (1) MSEs of a single simulation of both single and product bases and 
+%                         (2) average MSEs and var(MSE) across 200 simulations with customizable sigma noise value
+
+% We perform hard thresholding with the universal threshold from VisuShrink (Donoho and Johnstone, 1992a)
+
 
 close all; clear; clc;
 colormap gray
 
 %  User defined parameters  
 M = 200;  % number of simulations
-SNR = 5;  % can change to 3, 5, or 7 
+sigma = 20; % interesting to see is at sigma = 500                                
+
 
 % Storing MSE values
 
@@ -34,7 +40,6 @@ N = n*n;
 figure(1); imagesc(A); axis image off; title(sprintf('Barbara %dx%d',n,n));
 
 
-sigma = 20; % interesting to see is at sigma = 500                                
 Y = A + sigma*randn(size(A)); % signal + noise
 figure(2); imagesc(Y); axis image off; colormap gray;
 title('With noise added');
