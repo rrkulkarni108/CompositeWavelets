@@ -1,6 +1,11 @@
 
 % Comparison of Product Matrices W1W2 to Single Base
 % Usage of Barbara image for comparison
+% Displays 4 images: 
+% (1) Original Barbara 512 x 512 Image
+% (2) Barbara image with noise added (sigma can be modified by choice of user)
+% (3) Denoised Barbara image using single wavelet basis (bases can be chosen by user- we choose most symmetric wavelets)
+% (4) Denoise Barbara image using product wavelet bases (bases chosen by user)
 
 
 close all; clear; clc;
