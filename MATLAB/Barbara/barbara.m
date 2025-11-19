@@ -18,8 +18,7 @@ colormap gray
 
 %  User defined parameters  
 M = 200;  % number of simulations
-sigma = 20; % interesting to see is at sigma = 500                                
-
+sigma = 50; % interesting to see is at sigma = 500                                
 
 % Storing MSE values
 
@@ -70,12 +69,55 @@ hfilt_daub5 = [
     0.16010239797419290
 ];  % Daub 5
 
-hfilt_coif3 = [	.038580777748	-.126969125396	-.077161555496	...
+hfilt_coif1 = [	.038580777748	-.126969125396	-.077161555496	...
 				.607491641386	.745687558934	.226584265197	]; % coiflet 6 tap
+
+hfilt_coif3  =  [	-.003793512864	.007782596426	.023452696142	...
+				-.065771911281	-.061123390003	.405176902410	...
+				.793777222626	.428483476378	-.071799821619	...
+				-.082301927106	.034555027573	.015880544864	...
+				-.009007976137	-.002574517688	.001117518771	...
+				.000466216960	-.000070983303	-.000034599773	]; % coiflet 18 tap 
+hfilt_coif4 = [	.000892313668	-.001629492013	-.007346166328	...
+				.016068943964	.026682300156	-.081266699680	...
+				-.056077313316	.415308407030	.782238930920	...
+				.434386056491	-.066627474263	-.096220442034	...
+				.039334427123	.025082261845	-.015211731527	...
+				-.005658286686	.003751436157	.001266561929	...
+				-.000589020757	-.000259974552	.000062339034	...
+				.000031229876	-.000003259680	-.000001784985	]; % Coif 24 tap
+
+% Extract H filter for product W1W2 where W1 = Symm4 and W2 = Coif 3
+%   hfilt_symm4  = H1 (lowpass for W1)
+%   hfilt_coif3  = H2 (lowpass for W2)
+
+% upsample H2 by 2  (insert one zero between taps)
+h2_up = upsample(hfilt_coif3, 2);   % [h2(0),0,h2(1),0,h2(2),0,...]
+
+% convolve H1 with upsampled H2 to get H(z) = H1(z) H2(z^2)
+hfilt_prod1 = conv(hfilt_symm4, h2_up);
+
+% Extract H filter for product W1W2 where W1 = Coif3 and W2 = Symm 4
+%   hfilt_coif3  = H1 (lowpass for W1)
+%   hfilt_symm4  = H2 (lowpass for W2)
+
+% upsample H2 by 2  (insert one zero between taps)
+h2_up2 = upsample(hfilt_symm4, 2);   % [h2(0),0,h2(1),0,h2(2),0,...]
+
+% convolve H1 with upsampled H2 to get H(z) = H1(z) H2(z^2)
+hfilt_prod2 = conv(hfilt_coif3, h2_up2);
+
+
+% display coefs (row vector)
+fprintf('Product H filter (Symm4 x Coif3):\n');
+disp(hfilt_prod1);
+fprintf('Product H filter (Coif3 x Symm4):\n');
+disp(hfilt_prod2);
+
 
 % Single and product bases
 W1 = Wavmat(hfilt_symm4, n, 2, 2);
-W2 = Wavmat(hfilt_daub3, n, 2, 2);
+W2 = Wavmat(hfilt_coif3, n, 2, 2);
 W1W2 = W1*W2;                               % product base
 
 tau = sigma * sqrt(2*log(N)); % universal threshold
