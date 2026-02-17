@@ -1,0 +1,380 @@
+# -*- coding: utf-8 -*-
+"""blocks_composite.py
+
+# BLOCKS signal used for comparison
+
+## Matrix Product case - many (M) number of simulations - using SNR
+
+### Comparison of single base wavelet matrix with Matrix Products
+ (1) Two-Matrix Product W1W2 comparison to Single base
+
+ (2) Similarity Transform W1'W2W1 comparison to W1W2, Single base
+
+ (3) Kronecker Product Transform comparison to single base
+
+##### Three methods of Universal Thresholding, BAMS, and ABE are applied to the transformed signal
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from Wavmat import Wavmat  # expects: Wavmat(n, h=None, k0=None, shift=None)
+
+
+def bayesrule(d, mu, tau, eps):
+    d = float(d)
+    mu = float(mu)
+    tau = float(tau)
+    eps = float(eps)
+
+    s2m = np.sqrt(2.0 * mu)
+    ad = abs(d)
+
+    de = 0.5 * np.sqrt(2.0 * mu) * np.exp(-ad * s2m)
+
+    denom_m = (2.0 * tau**2 - 1.0 / mu)
+    m = (tau * np.exp(-ad / tau) - (1.0 / s2m) * np.exp(-s2m * ad)) / denom_m
+
+    me = eps * de + (1.0 - eps) * m
+
+    if d >= 0.0:
+        num = (tau * (tau**2 - 1.0 / (2.0 * mu)) * d * np.exp(-d / tau)
+               + (tau**2 / mu) * (np.exp(-s2m * d) - np.exp(-d / tau)))
+        den = ((tau**2 - 1.0 / (2.0 * mu))
+               * (tau * np.exp(-d / tau) - (1.0 / s2m) * np.exp(-s2m * d)))
+        br = num / den
+    else:
+        num = (tau * (tau**2 - 1.0 / (2.0 * mu)) * d * np.exp(d / tau)
+               - (tau**2 / mu) * (np.exp(s2m * d) - np.exp(d / tau)))
+        den = ((tau**2 - 1.0 / (2.0 * mu))
+               * (tau * np.exp(d / tau) - (1.0 / s2m) * np.exp(s2m * d)))
+        br = num / den
+
+    bre = ((1.0 - eps) * m * br) / ((1.0 - eps) * m + eps * de)
+
+    return me, bre
+
+def bamsShrinkGlobal(wd, bayesrule_fn):
+    wd = np.asarray(wd).reshape(-1)
+    n = wd.size
+
+    w = np.sort(wd)
+    low  = max(int(np.floor(0.25 * n)), 1)
+    high = max(int(np.floor(0.75 * n)), 1)
+    pseudos = np.abs(w[high - 1] - w[low - 1]) / 1.5
+    mu = 1.0 / max(pseudos**2, 1e-8)
+
+    tau = np.sqrt(max(np.std(wd, ddof=1)**2 - 1.0 / mu, 1e-4))
+    eps = 0.95
+
+    wd_shrunk = np.zeros_like(wd, dtype=float)
+    for j in range(n):
+        out = bayesrule_fn(wd[j], mu, tau, eps)
+        wd_shrunk[j] = out[1] if isinstance(out, (tuple, list)) and len(out) >= 2 else out
+
+    pars = {"mu": mu, "tau": tau, "eps": eps}
+    return wd_shrunk, pars
+
+
+def abeShrink(wd, sigma2):
+    wd = np.asarray(wd).reshape(-1)
+    wd2 = wd**2
+    wd_abe = np.zeros_like(wd, dtype=float)
+    mask = wd2 > 3.0 * sigma2
+    wd_abe[mask] = (wd2[mask] - 3.0 * sigma2) / wd[mask]
+    return wd_abe
+
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+def blocks_signal(n):
+    """
+    MATLAB Blocks construction:
+      t = (1:m)/m, pos/hgt arrays, sig += (1 + sign(t-pos(j)))*(hgt(j)/2)
+    Returns: t, sig (both length n)
+    """
+    m = n
+    t = np.arange(1, m + 1) / m
+    pos = np.array([.1, .13, .15, .23, .25, .40, .44, .65, .76, .78, .81])
+    hgt = np.array([4, -5, 3, -4, 5, -4.2, 2.1, 4.3, -3.1, 2.1, -4.2])
+    sig = np.zeros_like(t)
+    for p, h in zip(pos, hgt):
+        sig = sig + (1 + np.sign(t - p)) * (h / 2.0)
+    return t, sig
+
+def hard_threshold(w, lam):
+    """Hard threshold: set entries with |w| < lambda to 0."""
+    out = w.copy()
+    out[np.abs(out) < lam] = 0.0
+    return out
+
+def mse(a, b):
+    """Mean squared error between same-length 1D arrays."""
+    d = a - b
+    return np.mean(d * d)
+
+
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
+def main():
+    # close all; clear; clc;
+    rng = np.random.default_rng()  # for reproducability
+
+    # User Defined Parameters
+    M = 200
+    SNR = 5  # can change to 3, 5, or 7
+
+    # Storing MSE values
+    mse_kron_vec = np.zeros(M)
+    mse_W1W2W1_vec = np.zeros(M)
+    mse_W1W2_vec = np.zeros(M)
+
+    mse_W1_vec = np.zeros(M)
+    mse_W2_vec = np.zeros(M)
+
+    # BAMS
+    mse_W1W2_BAMS_vec = np.zeros(M)
+    mse_121_BAMS_vec  = np.zeros(M)
+    mse_W1_BAMS_vec   = np.zeros(M)
+    mse_W2_BAMS_vec   = np.zeros(M)
+    mse_kron_BAMS_vec = np.zeros(M)
+
+    # ABE
+    mse_W1W2_ABE_vec = np.zeros(M)
+    mse_121_ABE_vec  = np.zeros(M)
+    mse_W1_ABE_vec   = np.zeros(M)
+    mse_W2_ABE_vec   = np.zeros(M)
+    mse_kron_ABE_vec = np.zeros(M)
+
+    sigma2 = 1.0  # because noise ~ N(0,1) and W is orthogonal
+
+    n = 1024
+    nl = 3
+
+    # Blocks signal
+    t, s_orig = blocks_signal(n)
+
+    plt.figure()
+    plt.plot(t, s_orig)
+    plt.title("Original Blocks signal")
+    plt.show()
+
+    # Haar filter
+    hfilt_haar = np.array([np.sqrt(2)/2, np.sqrt(2)/2])
+
+    # Wavelet matrices
+    W1 = Wavmat(n, hfilt_haar, nl, 0)
+    W2 = Wavmat(n, hfilt_haar, nl, 0)
+
+    # Standardize signal to have var=1 then scale by sqrt(SNR)
+    signal_std = np.sqrt(np.var(s_orig, ddof=1))
+    s_orig = s_orig / signal_std * np.sqrt(SNR)
+
+    # Universal threshold (noise ~ N(0,1))
+    lam = np.sqrt(2.0 * np.log(n))
+
+    # Precompute composite transforms that do not depend on noise draw
+    W121 = (W1.T @ W2) @ W1
+    W12 = W1 @ W2
+
+    # Kron transform pieces 
+    W0   = Wavmat(2**7, hfilt_haar, 4, 0)
+    W0_2 = Wavmat(2**3, hfilt_haar, 1, 0)
+    WW = np.kron(W0, W0_2)
+
+    # Monte Carlo loop
+    for m in range(M):
+        s = s_orig + rng.standard_normal(size=s_orig.shape)  # adds unit variance Gaussian noise
+
+        s_col = s.reshape(-1, 1)
+
+        # ----------------------------------------------------
+        # W1'W2W1 Product Wavelet Shrinkage
+        # ----------------------------------------------------
+        wd121 = (W121 @ s_col).reshape(-1)         # coeffs (n,)
+        wd_121_raw = wd121.copy()
+
+        wd121_thr = hard_threshold(wd121, lam)
+        sr121 = (W121.T @ wd121_thr.reshape(-1, 1)).reshape(-1)
+
+        wd_121_b, _ = bamsShrinkGlobal(wd_121_raw, bayesrule)
+        sr121_b = (W121.T @ wd_121_b.reshape(-1, 1)).reshape(-1)
+
+        wd121_abe = abeShrink(wd_121_raw, sigma2)
+        sr121_abe = (W121.T @ wd121_abe.reshape(-1, 1)).reshape(-1)
+
+        mse_W1W2W1_vec[m] = mse(s_orig, sr121)
+        mse_121_BAMS_vec[m] = mse(s_orig, sr121_b)
+        mse_121_ABE_vec[m] = mse(s_orig, sr121_abe)
+
+        # ----------------------------------------------------
+        # W1W2 Product Wavelet Shrinkage
+        # ----------------------------------------------------
+        wd12 = (W12 @ s_col).reshape(-1)
+        wd12_raw = wd12.copy()
+
+        wd12_thr = hard_threshold(wd12, lam)
+        sr12 = (W12.T @ wd12_thr.reshape(-1, 1)).reshape(-1)
+
+        wd12_b, _ = bamsShrinkGlobal(wd12_raw, bayesrule)
+        sr12_b = (W12.T @ wd12_b.reshape(-1, 1)).reshape(-1)
+
+        wd12_abe = abeShrink(wd12_raw, sigma2)
+        sr12_abe = (W12.T @ wd12_abe.reshape(-1, 1)).reshape(-1)
+
+        mse_W1W2_vec[m] = mse(s_orig, sr12)
+        mse_W1W2_BAMS_vec[m] = mse(s_orig, sr12_b)
+        mse_W1W2_ABE_vec[m] = mse(s_orig, sr12_abe)
+
+        # ----------------------------------------------------
+        # Single Base W1
+        # ----------------------------------------------------
+        wd_W1 = (W1 @ s_col).reshape(-1)
+        wd_W1_raw = wd_W1.copy()
+
+        wd_W1_thr = hard_threshold(wd_W1, lam)
+        sr_W1 = (W1.T @ wd_W1_thr.reshape(-1, 1)).reshape(-1)
+
+        wd_W1_b, _ = bamsShrinkGlobal(wd_W1_raw, bayesrule)
+        srW1_b = (W1.T @ wd_W1_b.reshape(-1, 1)).reshape(-1)
+
+        wd_W1_abe = abeShrink(wd_W1_raw, sigma2)
+        sr_W1_abe = (W1.T @ wd_W1_abe.reshape(-1, 1)).reshape(-1)
+
+        mse_W1_vec[m] = mse(s_orig, sr_W1)
+        mse_W1_BAMS_vec[m] = mse(s_orig, srW1_b)
+        mse_W1_ABE_vec[m] = mse(s_orig, sr_W1_abe)
+
+        # ----------------------------------------------------
+        # Single Base W2
+        # ----------------------------------------------------
+        wd_W2 = (W2 @ s_col).reshape(-1)
+        wd_W2_raw = wd_W2.copy()
+
+        wd_W2_thr = hard_threshold(wd_W2, lam)
+        sr_W2 = (W2.T @ wd_W2_thr.reshape(-1, 1)).reshape(-1)
+
+        wd_W2_b, _ = bamsShrinkGlobal(wd_W2_raw, bayesrule)
+        srW2_b = (W2.T @ wd_W2_b.reshape(-1, 1)).reshape(-1)
+
+        mse_W2_vec[m] = mse(s_orig, sr_W2)
+        mse_W2_BAMS_vec[m] = mse(s_orig, srW2_b)
+
+
+        # ----------------------------------------------------
+        # Kronecker Product
+        # ----------------------------------------------------
+        wd_kron = (WW @ s_col).reshape(-1)
+        wd_kron_raw = wd_kron.copy()
+
+        wd_kron_thr = hard_threshold(wd_kron, lam)
+        sr_kron = (WW.T @ wd_kron_thr.reshape(-1, 1)).reshape(-1)
+
+        wd_kron_b, _ = bamsShrinkGlobal(wd_kron_raw, bayesrule)
+        srkron_b = (WW.T @ wd_kron_b.reshape(-1, 1)).reshape(-1)
+
+        wd_kron_abe = abeShrink(wd_kron_raw, sigma2)
+        srkron_abe = (WW.T @ wd_kron_abe.reshape(-1, 1)).reshape(-1)
+
+        mse_kron_vec[m] = mse(s_orig, sr_kron)
+        mse_kron_BAMS_vec[m] = mse(s_orig, srkron_b)
+        mse_kron_ABE_vec[m] = mse(s_orig, srkron_abe)
+
+    # ------------------------------------------------------------
+    # Averages
+    # ------------------------------------------------------------
+    avg_mse_W1W2W1 = np.mean(mse_W1W2W1_vec)
+    avg_mse_W1W2   = np.mean(mse_W1W2_vec)
+    avg_mse_W1     = np.mean(mse_W1_vec)
+    avg_mse_W2     = np.mean(mse_W2_vec)
+    avg_mse_kron   = np.mean(mse_kron_vec)
+
+    avg_mse_W1_BAMS   = np.mean(mse_W1_BAMS_vec)
+    avg_mse_W2_BAMS   = np.mean(mse_W2_BAMS_vec)
+    avg_mse_W1W2_BAMS = np.mean(mse_W1W2_BAMS_vec)
+    avg_mse_kron_BAMS = np.mean(mse_kron_BAMS_vec)
+    avg_mse_121_BAMS  = np.mean(mse_121_BAMS_vec)
+
+    avg_mse_W1_ABE    = np.mean(mse_W1_ABE_vec)
+    avg_mse_W1W2_ABE  = np.mean(mse_W1W2_ABE_vec)
+    avg_mse_kron_ABE  = np.mean(mse_kron_ABE_vec)
+    avg_mse_121_ABE   = np.mean(mse_121_ABE_vec)
+
+    # ------------------------------------------------------------
+    # Print tables
+    # ------------------------------------------------------------
+    def print_table(header, rows):
+        print(header)
+        print("| {:22s} | {:11s} | {:16s} |".format("Method", "Average MSE", "Variance of MSE"))
+        print("|------------------------|-------------|------------------|")
+        for name, avg, var_ in rows:
+            print("| {:22s} | {:0.4f}      | {:0.4f}           |".format(name, avg, var_))
+        print("-" * 71)
+        print()
+
+    print_table(
+        "ABE THRESHOLDING------------------------------------------------------",
+        [
+            ("W1 Haar (ABE)",   avg_mse_W1_ABE,   np.var(mse_W1_ABE_vec, ddof=1)),
+            ("W1W2 (ABE)",      avg_mse_W1W2_ABE, np.var(mse_W1W2_ABE_vec, ddof=1)),
+            ("Kron (ABE)",      avg_mse_kron_ABE, np.var(mse_kron_ABE_vec, ddof=1)),
+            ("W1W2W1 (ABE)",    avg_mse_121_ABE,  np.var(mse_121_ABE_vec, ddof=1)),
+        ],
+    )
+
+    print_table(
+        "BAMS THRESHOLDING-----------------------------------------------------",
+        [
+            ("W1 Haar (BAMS)",  avg_mse_W1_BAMS,   np.var(mse_W1_BAMS_vec, ddof=1)),
+            ("W1W2 (BAMS)",     avg_mse_W1W2_BAMS, np.var(mse_W1W2_BAMS_vec, ddof=1)),
+            ("Kron (BAMS)",     avg_mse_kron_BAMS, np.var(mse_kron_BAMS_vec, ddof=1)),
+            ("W1W2W1 (BAMS)",   avg_mse_121_BAMS,  np.var(mse_121_BAMS_vec, ddof=1)),
+        ],
+    )
+
+    print_table(
+        "UNIVERSAL THRESHOLDING----------------------------------------",
+        [
+            ("Kronecker Product", avg_mse_kron,   np.var(mse_kron_vec, ddof=1)),
+            ("W1W2W1 Product",    avg_mse_W1W2W1, np.var(mse_W1W2W1_vec, ddof=1)),
+            ("W1W2 Product",      avg_mse_W1W2,   np.var(mse_W1W2_vec, ddof=1)),
+            ("W1 (Haar)",         avg_mse_W1,     np.var(mse_W1_vec, ddof=1)),
+            # ("W2 (Haar)",       avg_mse_W2,     np.var(mse_W2_vec, ddof=1)),
+        ],
+    )
+
+    # ------------------------------------------------------------
+    # Boxplots
+    # ------------------------------------------------------------
+    plt.figure()
+    plt.boxplot([mse_W1W2_vec, mse_W1_vec, mse_W2_vec], tick_labels=["W1W2", "Haar", "Haar"])
+    plt.ylabel("MSE")
+    plt.title("MSE Distributions for M = 200 Simulations")
+    plt.show()
+
+    plt.figure()
+    plt.boxplot([mse_kron_vec, mse_W1W2W1_vec, mse_W1W2_vec, mse_W1_vec, mse_W2_vec],
+                tick_labels=["kron", "W1W2W1", "W1W2", "Haar", "Haar"])
+    plt.ylabel("MSE")
+    plt.title("MSE Distributions including Kron and W1W2W1")
+    plt.show()
+
+    plt.figure()
+    plt.boxplot([mse_kron_BAMS_vec, mse_121_BAMS_vec, mse_W1W2_BAMS_vec, mse_W1_BAMS_vec, mse_W2_BAMS_vec],
+                tick_labels=["kron", "W1W2W1", "W1W2", "Haar", "Haar"])
+    plt.ylabel("MSE")
+    plt.title("MSE Distributions including Kron and W1W2W1, BAMS thresholding")
+    plt.show()
+
+    plt.figure()
+    plt.boxplot([mse_kron_ABE_vec, mse_121_ABE_vec, mse_W1W2_ABE_vec, mse_W1_ABE_vec],
+                tick_labels=["kron", "W1W2W1", "W1W2", "Haar"])
+    plt.ylabel("MSE")
+    plt.title("MSE Distributions including Kron and W1W2W1, ABE thresholding")
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
