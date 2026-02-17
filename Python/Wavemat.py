@@ -63,7 +63,7 @@ def Wavmat(n, h=None, k0=None, shift=None):
     J=int(np.log2(n))
       
     oldmat = np.identity(2**(J-k0)) 
-    print(oldmat)
+    #print(oldmat)
     for k in np.arange(k0,0,-1):   
                 ubJk =  2**(J-k) 
                 ubJk1 = 2**(J-k+1) 
