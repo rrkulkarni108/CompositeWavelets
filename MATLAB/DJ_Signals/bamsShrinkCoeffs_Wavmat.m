@@ -1,6 +1,10 @@
 %% Helper function - BAMS levelwise
 % Based on demo2d, BAMS.m, Wavmat.m and Angelini Vidakovic gamma 
 
+% Does not give optimal result for composite-like transforms since transforms are no longer wavelets;
+% they do not have classical wavelet structure anymore 
+% level dependent code is not suitable in this scenario - see bamsShrinkGlobal.m for more optimal global approach
+
 function [wd_shrunk, pars] = bamsShrinkCoeffs_Wavmat(wd, n, nl)
 % BAMS/Angelini shrinkage applied to coefficient vector from Wavmat ordering.
 % Uses bayesrule.m (Vidakovic & Ruggeri).
