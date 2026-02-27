@@ -11,7 +11,7 @@ signals = {'Doppler','Blocks','Bumps','HeaviSine'};  % order of subplots
 % colors
 cW1W2 = [0.00 0.45 0.70];   % blue 
 cW1   = [0.80 0.20 0.20];   % red
-cW2   = [1.00, 0.50, 0.00] %[0.00 0.62 0.45];   % purple
+cW2   = [1.00, 0.50, 0.00] ; %[0.00 0.62 0.45];   % purple
 bandAlpha = 0.15;
 lineW     = 1;
 
@@ -101,10 +101,10 @@ for si = 1:numel(signals)
     end
 
     % Mean and +/-1 SD intervals
-    mu_W1W2 = mean(L_W1W2, 2);  s
-    d_W1W2 = std(L_W1W2, 0, 2);
-    mu_W1   = mean(L_W1,   2);  s
-    d_W1   = std(L_W1,   0, 2);
+    mu_W1W2 = mean(L_W1W2, 2);  
+    sd_W1W2 = std(L_W1W2, 0, 2);
+    mu_W1   = mean(L_W1,   2);  
+    sd_W1   = std(L_W1,   0, 2);
     if includeW2
         mu_W2 = mean(L_W2, 2);  sd_W2   = std(L_W2,   0, 2);
     end
