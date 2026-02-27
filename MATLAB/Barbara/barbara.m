@@ -18,7 +18,7 @@ colormap gray
 
 %  User defined parameters  
 M = 200;  % number of simulations
-sigma = 50; % interesting to see is at sigma = 500                                
+sigma = 100; % interesting to see is at sigma = 500                                
 
 % Storing MSE values
 
@@ -28,6 +28,8 @@ mse_W1W2_vec = zeros(M, 1);
 % Single base
 mse_prod = zeros(M, 1);
 mse_single = zeros(M, 1);
+mse_single2 = zeros(M, 1);
+
 
 % Display original 512 x 512 image
 Afull = double(imread('barbara_gray.bmp'));   % 512x512
@@ -122,11 +124,17 @@ W1W2 = W1*W2;                               % product base
 
 tau = sigma * sqrt(2*log(N)); % universal threshold
 
-% Single base 
+% Single base W1
 C_single = W1 * Y * W1';
 C_single_th = C_single .* (abs(C_single) > tau);
 Yhat_single = W1' * C_single_th * W1;
 mse_single = mean((Yhat_single(:) - A(:)).^2);
+
+% Single base W2
+C_single2 = W2 * Y * W2';
+C_single_th2 = C_single2 .* (abs(C_single2) > tau);
+Yhat_single2 = W2' * C_single_th2 * W2;
+mse_single2 = mean((Yhat_single2(:) - A(:)).^2);
 
 % Product Matrix W1W2
 C_prod = W1W2 * Y * W1W2';
@@ -149,7 +157,7 @@ for m = 1:M
     tau = sigma * sqrt(2*log(N)); % Universal thresholding, noise ~ Normal(0,1)
     
 
-    %%  W1W2 Product Wavelet Shrinkage  (W1- Symm 4, W2- DAUB 3)    
+    %%  W1W2 Product Wavelet Shrinkage  (W1- Symm 4, W2- Coif 3)    
     C_prod = W1W2 * Y * W1W2'; % apply wavelet to noisy signal
     C_prod_th = C_prod .* (abs(C_prod) > tau); % Universal thresholding, noise ~ Normal(0,1)
     Yhat_prod = W1W2' * C_prod_th * W1W2; % reconstruct denoised signal
@@ -161,6 +169,11 @@ for m = 1:M
     Yhat_single = W1' * C_single_th * W1;
     mse_single(m) = mean((Yhat_single(:) - A(:)).^2);
 
+     %%  Single Base (W2 - Coif3) Wavelet Shrinkage  
+    C_single2 = W2 * Y * W2';
+    C_single_th2 = C_single2 .* (abs(C_single2) > tau);
+    Yhat_single2 = W2' * C_single_th2 * W2;
+    mse_single2(m) = mean((Yhat_single2(:) - A(:)).^2);
 
 end
 
@@ -170,12 +183,16 @@ end
 % and for single base W1
  avg_mse_W1 = mean(mse_single);
 
+% and for single base W1
+ avg_mse_W2 = mean(mse_single2);
+
  % Print results
 
 fprintf('| %-22s | %-11s | %-16s |\n', 'Method', 'Average MSE', 'Variance of MSE');
 fprintf('|------------------------|-------------|------------------|\n');
 fprintf('| %-22s | %.4f      | %.4f           |\n', 'W1W2 Product', avg_mse_W1W2, var(mse_prod));
 fprintf('| %-22s | %.4f      | %.4f           |\n', 'W1 (Symm4)', avg_mse_W1, var(mse_single));
+fprintf('| %-22s | %.4f      | %.4f           |\n', 'W2 (Coif3)', avg_mse_W2, var(mse_single2));
 
 
 
