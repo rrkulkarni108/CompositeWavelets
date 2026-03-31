@@ -1,7 +1,7 @@
 # Composite Wavelet Matrix Based Transforms and Applications 
 Radhika Kulkarni and Brani Vidakovic
 
-This repository contains MATLAB and Python files of simulations and examples in the paper. Figures and simulations can be reproduced using these files. 
+This repository contains MATLAB and selected Python files of simulations and examples in the paper. Figures and simulations can be reproduced using these files. 
 Please reach out to rrkulkarni@tamu.edu with any inquiries. 
 
 
