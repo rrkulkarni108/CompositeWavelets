@@ -1,7 +1,7 @@
 # Composite Wavelet Matrix Based Transforms and Applications 
 Radhika Kulkarni and Brani Vidakovic
 
-This repository contains MATLAB and selected Python files of simulations and examples in the paper. Figures and simulations can be reproduced using these files. 
+This repository contains MATLAB and selected Python files of simulations and examples in the [paper](https://arxiv.org/pdf/2603.02593). Figures and simulations can be reproduced using these files. 
 Please reach out to rrkulkarni@tamu.edu with any inquiries. 
 
 
@@ -28,4 +28,4 @@ to the standard transform–shrink–inverse pipeline and preserves orthogonalit
 by construction. The results suggest a shift in viewpoint: wavelet transforms can be treated as modular
 orthogonal operators that may be algebraically combined to better match signal structure. Composite
 wavelet–like matrices therefore provide a practical and flexible extension of classical wavelet methods for
-denoising, compression, and multiscale analysis in one– and higher–dimensional settings
+denoising, compression, and multiscale analysis in one– and higher–dimensional settings.
