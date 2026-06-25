@@ -9,6 +9,7 @@
 % Also outputs to console 
 % (1) MSEs of a single simulation of both single and product bases 
 % (2) average MSEs and var(MSE) across M simulations with customizable sigma
+% (3) average SNR, PSNR and SSIM across M simulations on the scarf patch
 %
 % We perform hard thresholding with the universal threshold from
 % VisuShrink (Donoho and Johnstone, 1992a)
@@ -29,6 +30,17 @@ mse_single_full2 = zeros(M, 1);
 mse_prod_scarf   = zeros(M, 1);
 mse_single_scarf = zeros(M, 1);
 mse_single_scarf2 = zeros(M, 1);
+
+% storing image quality metrics - scarf patch
+snr_prod_scarf    = zeros(M, 1);
+snr_single_scarf  = zeros(M, 1);
+snr_single_scarf2 = zeros(M, 1);
+psnr_prod_scarf    = zeros(M, 1);
+psnr_single_scarf  = zeros(M, 1);
+psnr_single_scarf2 = zeros(M, 1);
+ssim_prod_scarf    = zeros(M, 1);
+ssim_single_scarf  = zeros(M, 1);
+ssim_single_scarf2 = zeros(M, 1);
 
 
 % Load image
@@ -154,15 +166,20 @@ title('Denoised scarf patch: Single base W');
 figure(14); imagesc(Yhat_prod_scarf); axis image off; colormap gray; 
 title('Denoised scarf patch: Product base W1W2');
 
-fprintf('\n--- One simulation (full image) ---\n');
+fprintf('\n One simulation (full image) \n');
 fprintf('MSE full (single base W):      %.3f\n', mse_single_full_one);
 fprintf('MSE full (product base W1W2):  %.3f\n', mse_prod_full_one);
 
-fprintf('\n--- One simulation (scarf patch only) ---\n');
+fprintf('\n One simulation (scarf patch only) \n');
 fprintf('MSE scarf (single base W):     %.3f\n', mse_single_scarf_one);
 fprintf('MSE scarf (product base W1W2): %.3f\n', mse_prod_scarf_one);
 
-% ---------------
+% image quality metrics calls (raw [0,255] images, peak = 255)
+peak = 255;
+snr_db  = @(ref,est) 10*log10( sum(ref(:).^2) / sum((ref(:)-est(:)).^2) );
+psnr_db = @(ref,est) 10*log10( peak^2 / mean((ref(:)-est(:)).^2) );
+
+% ---------------------------
 % Perform M simulations and calculate average MSE for both the full image
 % and scarf/tablecloth subset, depending on what is commented above
 
@@ -200,6 +217,19 @@ for i = 1:M
     mse_prod_scarf(i)   = mean((Yhat_prod_scarf(:)   - A_scarf(:)).^2);
     mse_single_scarf(i) = mean((Yhat_single_scarf(:) - A_scarf(:)).^2);
     mse_single_scarf2(i) = mean((Yhat_single_scarf2(:) - A_scarf(:)).^2);
+
+    % scarf image quality metrics (SNR, PSNR, SSIM on raw [0,255] patches)
+    snr_prod_scarf(i)    = snr_db(A_scarf, Yhat_prod_scarf);
+    snr_single_scarf(i)  = snr_db(A_scarf, Yhat_single_scarf);
+    snr_single_scarf2(i) = snr_db(A_scarf, Yhat_single_scarf2);
+
+    psnr_prod_scarf(i)    = psnr_db(A_scarf, Yhat_prod_scarf);
+    psnr_single_scarf(i)  = psnr_db(A_scarf, Yhat_single_scarf);
+    psnr_single_scarf2(i) = psnr_db(A_scarf, Yhat_single_scarf2);
+
+    ssim_prod_scarf(i)    = ssim(Yhat_prod_scarf,    A_scarf);
+    ssim_single_scarf(i)  = ssim(Yhat_single_scarf,  A_scarf);
+    ssim_single_scarf2(i) = ssim(Yhat_single_scarf2, A_scarf);
 end
 
 % averages
@@ -225,7 +255,16 @@ fprintf('| %-22s | %.4f      | %.4f           |\n', 'W1W2 Product', avg_mse_prod
 fprintf('| %-22s | %.4f      | %.4f           |\n', 'W1 (Symm4)',   avg_mse_single_scarf, var(mse_single_scarf));
 fprintf('| %-22s | %.4f      | %.4f           |\n', 'W2 (Coif3)',   avg_mse_single_scarf2, var(mse_single_scarf2));
 
-% --------------------------------------------------------------------
+% Average image quality metrics on the scarf patch over M simulations
+fprintf('\n| %-22s | %-8s | %-8s | %-8s |\n', 'Method (scarf)', 'SNR dB', 'PSNR dB', 'SSIM');
+fprintf('|------------------------|----------|----------|----------|\n');
+fprintf('| %-22s | %.2f    | %.2f    | %.4f   |\n', 'W1W2 Product', ...
+    mean(snr_prod_scarf),    mean(psnr_prod_scarf),    mean(ssim_prod_scarf));
+fprintf('| %-22s | %.2f    | %.2f    | %.4f   |\n', 'W1 (Symm4)', ...
+    mean(snr_single_scarf),  mean(psnr_single_scarf),  mean(ssim_single_scarf));
+fprintf('| %-22s | %.2f    | %.2f    | %.4f   |\n', 'W2 (Coif3)', ...
+    mean(snr_single_scarf2), mean(psnr_single_scarf2), mean(ssim_single_scarf2));
+
 % Plot MSE over iterations for scarf patch
 figure;
 plot(1:M, mse_single_scarf, '-o', 'DisplayName','Single base Symm4 (scarf)');
