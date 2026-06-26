@@ -308,3 +308,38 @@ prod_scarf   = mat2gray(Yhat_prod_scarf);
 %imwrite(noisy_scarf,  'scarf_noisy.png');
 %imwrite(single_scarf, 'scarf_single.png');
 %imwrite(prod_scarf,   'scarf_product.png');
+
+% code to add more columns to the right on Table 3 (SNR, PSNR, SSIM)
+peak = 255;
+snr_db  = @(ref,est) 10*log10( sum(ref(:).^2) / sum((ref(:)-est(:)).^2) );
+psnr_db = @(ref,est) 10*log10( peak^2 / mean((ref(:)-est(:)).^2) );
+
+sigmas = [20 50 100];
+
+for sidx = 1:numel(sigmas)
+    sigma = sigmas(sidx);
+    tau   = sigma * sqrt(2*log(N));
+
+    snrP=zeros(M,1);  snrS=zeros(M,1);  snrS2=zeros(M,1);
+    psnrP=zeros(M,1); psnrS=zeros(M,1); psnrS2=zeros(M,1);
+    ssimP=zeros(M,1); ssimS=zeros(M,1); ssimS2=zeros(M,1);
+    mseP=zeros(M,1);  mseS=zeros(M,1);  mseS2=zeros(M,1);
+
+    for i = 1:M
+        Y = A + sigma*randn(size(A));
+
+        C = W1W2*Y*W1W2'; C = C.*(abs(C)>tau); YP  = W1W2'*C*W1W2;
+        C = W1*Y*W1';     C = C.*(abs(C)>tau); YS  = W1'*C*W1;
+        C = W2*Y*W2';     C = C.*(abs(C)>tau); YS2 = W2'*C*W2;
+
+        mseP(i)=mean((YP(:)-A(:)).^2); mseS(i)=mean((YS(:)-A(:)).^2); mseS2(i)=mean((YS2(:)-A(:)).^2);
+        snrP(i)=snr_db(A,YP);   snrS(i)=snr_db(A,YS);   snrS2(i)=snr_db(A,YS2);
+        psnrP(i)=psnr_db(A,YP); psnrS(i)=psnr_db(A,YS); psnrS2(i)=psnr_db(A,YS2);
+        ssimP(i)=ssim(YP,A);    ssimS(i)=ssim(YS,A);    ssimS2(i)=ssim(YS2,A);
+    end
+
+    fprintf('\n=== sigma = %d  (full image, %d sims) ===\n', sigma, M);
+    fprintf('%-12s MSE=%9.4f  SNR=%6.2f  PSNR=%6.2f  SSIM=%.4f\n','Product',  mean(mseP), mean(snrP), mean(psnrP), mean(ssimP));
+    fprintf('%-12s MSE=%9.4f  SNR=%6.2f  PSNR=%6.2f  SSIM=%.4f\n','Symm4 DWT',mean(mseS), mean(snrS), mean(psnrS), mean(ssimS));
+    fprintf('%-12s MSE=%9.4f  SNR=%6.2f  PSNR=%6.2f  SSIM=%.4f\n','Coif3 DWT',mean(mseS2),mean(snrS2),mean(psnrS2),mean(ssimS2));
+end
