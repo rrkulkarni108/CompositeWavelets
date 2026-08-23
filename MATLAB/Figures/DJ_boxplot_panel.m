@@ -2,21 +2,25 @@
 
 %% DJ 4-signal, 2x2 panels  -  W1W2, Kron, W1, (W2 if W1 != W2)
 close all; clear; clc;
+rng(1); 
 
 % User defined parameters
-M   = 200;           % number of simulations
-SNR = 5;             % can choose 3, 5, or 7
-n   = 1024;
-nl  = 3;             % WT levels 
-lambda = sqrt(2*log(n));   % universal threshold for N(0,1) noise
+M      = 200;        % number of simulations
+SNR_dB = 5;          % Power ratio in dB: 10*log10(P_signal/P_noise),
+                     % P_signal = ||s||^2/N, P_noise = sigma^2 = 1
+n      = 1024;
+nl     = 3;          % WT levels 
+sigma  = 1;          % noise sd, fixed
+lambda = sigma * sqrt(2*log(n));   % universal threshold for N(0,1) noise
 
 signals = {'Doppler','Blocks','Bumps','HeaviSine'};  % order of the subplots
 
 % Colors in order: W1W2, Kron, W1, W2
 palette = [0 0.45 0.70; 0.835 0.369 0; 0 0.62 0.451; 0.8 0.475 0.655];
 
-% Helper: build signal via MakeSignal and SNR-scale
-mk_sig = @(name) (MakeSignal(name,n) ./ std(MakeSignal(name,n))) * sqrt(SNR);
+% build signal via MakeSignal and scale to the target power ratio
+% so P_signal/P_noise = 10^(SNR_dB/10)
+mk_sig = @(name) (MakeSignal(name,n) ./ sqrt(mean(MakeSignal(name,n).^2))) * sqrt(10^(SNR_dB/10));
 
 % wavelet filters
 haar = [1/sqrt(2), 1/sqrt(2)];
@@ -86,7 +90,7 @@ for p = 1:4
     
     % Simulation loop
     for m = 1:M
-        s_noisy = s0 + randn(size(s0));   % unit-variance Gaussian noise
+        s_noisy = s0 + sigma*randn(size(s0));   % unit-variance Gaussian noise
         
         % W1W2 product shrinkage
         c = (W1 * (W2 * s_noisy')); 
@@ -140,48 +144,37 @@ for p = 1:4
     % draw boxplot outline and fill with patches 
     boxplot(Y, G, 'Colors', repmat([0 0 0], numel(methodsPresent), 1), ...
                  'Symbol','+');
-    title(name);
-    ylabel('Average MSE');
-    set(gca,'FontName','Times New Roman','FontSize',11);
+        title(name, 'FontSize', 16, 'FontWeight', 'bold');
+    ylabel('Average MSE', 'FontSize', 14);
+    set(gca, 'FontSize', 12, 'LineWidth', 1.4, ...
+             'XColor','k', 'YColor','k', 'Box','on')%, ...
+             %'XTickLabelRotation', 0);
     
     % fill boxes with colors
     bx = findobj(gca,'Tag','Box');
     bx = flipud(bx);
     for j = 1:numel(bx)
-        set(bx(j), 'LineWidth', 0.8);
+        set(bx(j), 'LineWidth', 0.7);
         patch(get(bx(j),'XData'), get(bx(j),'YData'), palette(j,:), ...
               'FaceAlpha',0.35, 'EdgeColor','k', 'LineWidth',0.8);
     end
     set(findobj(gca,'Tag','Median'),'Color',[0.15 0.15 0.15],'LineWidth',1.2);
     hold off;
+    
+    % report the numbers in the boxplots
+    fprintf('\n%s (L = %d)\n', name, nl_use);
+    fprintf('  W1W2 %.4f   Kron %.4f   W1 %.4f', ...
+        mean(amse_W1W2), mean(amse_Kron), mean(amse_W1));
+    if includeW2
+        fprintf('   W2 %.4f', mean(amse_W2));
+    end
+    fprintf('\n');
 end
 
 %  align the y-lims across panels 
 yl = [min(allY), max(allY)];
 for p = 1:4
+
     subplot(2,2,p); ylim(yl);
 end
 
-% make one legend outside the grid 
-presentUnion = {'W1W2','Kron','W1','W2'};
-% only keep items that appear in at least one panel
-keep = false(size(presentUnion));
-for j = 1:numel(presentUnion)
-    meth = presentUnion{j};
-    for p = 1:4
-        ax = subplot(2,2,p);
-        cats = categories(ax.Children(1).XData); 
-        if any(strcmp(cats, meth)), keep(j) = true; break; end
-    end
-end
-presentUnion = presentUnion(keep);
-ph = gobjects(numel(presentUnion),1);
-figure; axL = axes('Visible','off'); hold(axL,'on');
-for j = 1:numel(presentUnion)
-    idx = find(strcmp({'W1W2','Kron','W1','W2'}, presentUnion{j}));
-    ph(j) = plot(axL, nan, nan, 's', 'MarkerSize', 9, ...
-                 'MarkerFaceColor', palette(idx,:), ...
-                 'MarkerEdgeColor', 'k', 'LineWidth', 0.8);
-end
-legend(axL, ph, presentUnion, 'Orientation','horizontal','Box','off');
-title(axL, 'Methods Legend');
