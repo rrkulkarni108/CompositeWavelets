@@ -1,19 +1,19 @@
 %% Lorenz curves: W1W2 vs W1 vs W2 on DJ signals
+% Uses power ratio definition of SNR dB
 close all; clear; clc;
-
+rng(1);         
 
 % User defined parameters
-M   = 200;      % number of simulations
-SNR = 5;        %  3, 5, 7
-n   = 1024;
+M      = 200;   % number of simulations
+SNR_dB = 5;     % Power ratio in dB: 10*log10(P_signal/P_noise),
+                % P_signal = ||s||^2/N, P_noise = sigma^2 = 1
+n      = 1024;
 signals = {'Doppler','Blocks','Bumps','HeaviSine'};  % order of subplots
 
 % colors
-cW1W2 = [0.00 0.45 0.70];   % blue 
+cW1W2 = [0.00 0.45 0.70];   % blue
 cW1   = [0.80 0.20 0.20];   % red
-cW2   = [1.00, 0.50, 0.00] ; %[0.00 0.62 0.45];   % purple
-bandAlpha = 0.15;
-lineW     = 1;
+cW2   = [1.00, 0.50, 0.00];
 
 % filters
 haar = [1/sqrt(2), 1/sqrt(2)];
@@ -48,32 +48,32 @@ cfg.HeaviSine.W1 = sym4; cfg.HeaviSine.W2 = sym4; cfg.HeaviSine.nl = 3;
 % Helper function to calculate Lorenz from vector of energies
 % given vector v, returns normalized Lorenz L(p) with length n (p in [0,1])
 lorenz_of = @(v) ( ...
-    cumsum(sort(v(:).^2,'ascend')) ./ sum(v(:).^2) );
+    cumsum(sort(abs(v(:)).^2,'ascend')) ./ sum(abs(v(:)).^2) );
 
 % X-axis for plotting
 p = linspace(0,1,n)';           % p in [0,1]
 x_percent = p * 100;
 
 %  Figure 2×2 subplots of Lorenz curves
-figure('Color','w','Name','Lorenz curves: W1W2 vs W1 vs W2','NumberTitle','off');
-
-% To harmonize y-axis across panels if you like
-globalY = [];
+fig = figure('Color','w','Units','inches','Position',[1 1 7.5 5.6], ...
+    'Name','Lorenz curves: W1W2 vs W1 vs W2','NumberTitle','off');
 
 for si = 1:numel(signals)
     name = signals{si};
     nl_use = cfg.(name).nl;
 
-    % first build clean signal via MakeSignal then scale using SNR
+    % first build clean signal via MakeSignal then scale to the 
+    % Power ratio (second moment mean(s.^2), instead of previous var) so that
+    % P_signal/P_noise = 10^(SNR_dB/10) with unit-variance noise
     s_clean = MakeSignal(name, n);
-    s_clean = s_clean ./ std(s_clean) * sqrt(SNR);
+    s_clean = s_clean(:);
+    s_clean = s_clean ./ sqrt(mean(s_clean.^2)) * sqrt(10^(SNR_dB/10));
 
-    % Wavelet matrices  
-    W1 = Wavmat(cfg.(name).W1, n, nl_use, 0);
-    W2 = Wavmat(cfg.(name).W2, n, nl_use, 0);
-    W12 = W1 * W2;   
+    % Wavelet matrices
+    W1  = Wavmat(cfg.(name).W1, n, nl_use, 0);
+    W2  = Wavmat(cfg.(name).W2, n, nl_use, 0);
+    W12 = W1 * W2;
 
-    
     includeW2 = ~isequal(cfg.(name).W1(:), cfg.(name).W2(:));
 
     % preallocate the values for lorenz into vectors
@@ -83,13 +83,13 @@ for si = 1:numel(signals)
 
     % M Simulations
     for m = 1:M
-        s_noisy = s_clean + randn(size(s_clean));  % unit-variance noise
+        s_noisy = s_clean + randn(n,1);   % unit-variance noise => P_noise = 1
 
-        % get coefficents
-        c12 = W12 * s_noisy';     % W1W2
-        c1  = W1  * s_noisy';     % W1
+        % get coefficients
+        c12 = W12 * s_noisy;     % W1W2
+        c1  = W1  * s_noisy;     % W1
         if includeW2
-            c2 = W2  * s_noisy';  % W2
+            c2 = W2 * s_noisy;   % W2
         end
 
         % Normalized Lorenz curves
@@ -100,57 +100,39 @@ for si = 1:numel(signals)
         end
     end
 
-    % Mean and +/-1 SD intervals
-    mu_W1W2 = mean(L_W1W2, 2);  
-    sd_W1W2 = std(L_W1W2, 0, 2);
-    mu_W1   = mean(L_W1,   2);  
-    sd_W1   = std(L_W1,   0, 2);
+    % Mean curves over the M simulations
+    mu_W1W2 = mean(L_W1W2, 2);
+    mu_W1   = mean(L_W1,   2);
     if includeW2
-        mu_W2 = mean(L_W2, 2);  sd_W2   = std(L_W2,   0, 2);
+        mu_W2 = mean(L_W2, 2);
     end
 
     % Panel
-    subplot(2,2,si); hold on; grid on;
+    ax = subplot(2,2,si); hold on; grid on;
 
-    % Bands 
-    % W1W2 band
-    fill([x_percent; flipud(x_percent)], ...
-         [mu_W1W2 - sd_W1W2; flipud(mu_W1W2 + sd_W1W2)], ...
-         cW1W2, 'FaceAlpha', bandAlpha, 'EdgeColor', 'none');
-
-    % W1 band
-    fill([x_percent; flipud(x_percent)], ...
-         [mu_W1 - sd_W1; flipud(mu_W1 + sd_W1)], ...
-         cW1, 'FaceAlpha', bandAlpha, 'EdgeColor', 'none');
-
-    % W2 band (if W2 != W1)
+    plot(x_percent, mu_W1W2, 'Color', cW1W2, 'LineWidth', 1.3);
+    plot(x_percent, mu_W1,   'Color', cW1,   'LineWidth', 1.3);
     if includeW2
-        fill([x_percent; flipud(x_percent)], ...
-             [mu_W2 - sd_W2; flipud(mu_W2 + sd_W2)], ...
-             cW2, 'FaceAlpha', bandAlpha, 'EdgeColor', 'none');
+        plot(x_percent, mu_W2, 'Color', cW2, 'LineWidth', 1.3);
     end
 
-    % Mean curves
-    plot(x_percent, mu_W1W2, 'Color', cW1W2, 'LineWidth', lineW);
-    plot(x_percent, mu_W1,   'Color', cW1,   'LineWidth', lineW);
+    title(sprintf('%s (nl = %d)', name, nl_use), 'FontSize', 16, 'FontWeight','bold');
+    xlabel('p% of sorted coefficients', 'FontSize', 14);
+    ylabel('Lorenz L(p)', 'FontSize', 14);
+    xlim([-5, 105]); ylim([0, 1.02]);
+    set(ax, 'FontSize', 13, 'LineWidth', 1.4, ...
+            'XColor','k', 'YColor','k', 'GridAlpha', 0.15, 'Box','on');
+
     if includeW2
-        plot(x_percent, mu_W2, 'Color', cW2, 'LineWidth', lineW);
-    end
-
-    title(sprintf('%s (nl = %d)', name, nl_use));
-    xlabel('Percent'); ylabel('Lorenz L(p)'); xlim([-5, 105]); ylim([0, 1.02]);
-
-    globalY = [globalY; mu_W1W2; mu_W1];
-    if includeW2, globalY = [globalY; mu_W2]; end
-
-    % Legend per panel 
-    if includeW2
-        legend({'W1W2 band','W1 band','W2 band','W1W2','W1','W2'}, ...
-               'Location','southeast','Box','off');
+        legend({'W1W2','W1','W2'}, 'Location','northwest', ...
+               'Box','off', 'FontSize', 13);
     else
-        legend({'W1W2 band','W1 band','W1W2','W1'}, ...
-               'Location','southeast','Box','off');
+        legend({'W1W2','W1'}, 'Location','northwest', ...
+               'Box','off', 'FontSize', 13);
     end
 
     hold off;
 end
+
+set(fig,'PaperUnits','inches','PaperPosition',[0 0 7.5 5.6],'PaperSize',[7.5 5.6]);
+print(fig,'Figures/lorenz_W1W2.pdf','-dpdf','-r300');
