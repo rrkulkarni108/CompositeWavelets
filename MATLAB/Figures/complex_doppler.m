@@ -3,17 +3,18 @@
 % transforms when one of the bases is complex
 % Needs: Wavmat.m
 
-close all
-clear; clc;
+close all; clear; clc; rng(1);
 
-M    = 200;        % number of simulations
-N    = 1024;
-L    = 3;          % levels
-n    = N;
-SNR  = 5;          % can be 3, 5 or 7
+M      = 200;      % number of simulations
+N      = 1024;
+L      = 3;        % levels
+n      = N;
+SNR_dB = 5;        % Power ratio in dB: 10*log10(P_signal/P_noise),
+                   % P_signal = ||s||^2/N, P_noise = sigma^2 = 1
+sigma  = 1;        % noise sd, fixed
 
-t      = linspace(0,1,N).';
-s_orig = sqrt(t.*(1-t)) .* sin((2*pi*1.05)./(t+.05));   % Doppler 
+s_orig = MakeSignal('Doppler', N);
+s_orig = s_orig(:);  
 
 % W1: Complex DAUB6
 hfilt_c = [ -0.066291260736239 - 0.085581649610182i, ...
@@ -26,8 +27,8 @@ hfilt_c = [ -0.066291260736239 - 0.085581649610182i, ...
 % W2: Haar
 hfilt_r = [1/sqrt(2), 1/sqrt(2)];
 
-W1   = Wavmat(hfilt_c, N, L);          % complex Daub6
-W2   = Wavmat(hfilt_r, N, L);          % Haar
+W1   = Wavmat(hfilt_c, N, L, 0);          % complex Daub6
+W2   = Wavmat(hfilt_r, N, L, 0);          % Haar
 W12  = W1 * W2;                        % product 
 W121 = W1' * W2 * W1;                  % similarity transform 
 
@@ -44,14 +45,18 @@ L1 = min(L, floor(log2(N1)));   % 128
 N2 = 2^3;  
 L2 = min(L, floor(log2(N2)));   % 8
 
-Wc_small = Wavmat(hfilt_c, N1, L1);        % complex Daub6 
-Wr_small = Wavmat(hfilt_r, N2, L2);        % real Haar 
+Wc_small = Wavmat(hfilt_c, N1, L1, 0);        % complex Daub6 
+Wr_small = Wavmat(hfilt_r, N2, L2, 0);        % real Haar 
 
 WW = kron(Wc_small, Wr_small);             
 
 
 % Universal hard threshold 
 lambda = sqrt(2 * log(n));
+
+%  SNR scaling (Power definition: second moment mean(s.^2), not var)
+%  fixed, so only computed once outside the loop
+s_snr = (s_orig ./ sqrt(mean(s_orig.^2))) * sqrt(10^(SNR_dB/10));
 
 mse_kron_vec   = zeros(M,1);
 mse_W1W2W1_vec = zeros(M,1);
@@ -61,11 +66,7 @@ mse_W2_vec     = zeros(M,1);
 
 %  Simulations
 for m = 1:M
-    %  SNR scaling
-    s_base = s_orig;                                
-    signal_std = sqrt(var(s_base));                  % std 
-    s_snr = (s_base / signal_std) * sqrt(SNR);       % std(s_snr) = sqrt(SNR)
-    s = s_snr + randn(N,1);                          % add N(0,1) noise
+    s = s_snr + sigma*randn(N,1);        % add N(0,1) noise
 
     %%  W1' W2 W1 (similarity)
     wd121 = W121 * s;
@@ -105,6 +106,7 @@ avg_mse_W1W2   = mean(mse_W1W2_vec);
 avg_mse_W1     = mean(mse_W1_vec);
 avg_mse_W2     = mean(mse_W2_vec);
 
+fprintf('\nDoppler, SNR_in = %g dB (power definition), M = %d\n\n', SNR_dB, M);
 fprintf('| %-22s | %-11s | %-16s |\n', 'Method', 'Average MSE', 'Variance of MSE');
 fprintf('|------------------------|-------------|------------------|\n');
 fprintf('| %-22s | %.4f      | %.4f           |\n', 'Kronecker Product', avg_mse_kron,   var(mse_kron_vec));
@@ -117,17 +119,22 @@ fprintf('| %-22s | %.4f      | %.4f           |\n', 'W2 (Haar)',         avg_mse
 figure;
 boxplot([mse_W1W2_vec, mse_W1_vec, mse_W2_vec], ...
         {'W1W2','W1 (cD6)','W2 (Haar)'});
-ylabel('MSE'); title(sprintf('Doppler: MSE over M = %d simulations (SNR=%g)', M, SNR));
+ylabel('MSE');
+title(sprintf('Doppler: MSE over M = %d simulations (SNR_{in} = %g dB)', M, SNR_dB));
 colors = [0.8 0.3 0.3; 0.2 0.6 1.0; 0.2 0.6 1.0];
 boxes = findobj(gca,'Tag','Box');
 for j = 1:length(boxes)
     patch(get(boxes(j),'XData'), get(boxes(j),'YData'), colors(length(boxes)-j+1,:), ...
         'FaceAlpha',0.5, 'EdgeColor','k');
 end
+set(gca, 'XColor', 'k', 'YColor', 'k', 'LineWidth', 1.5, 'Box', 'on', 'Layer', 'top');
+
+
 figure;
 boxplot([mse_kron_vec, mse_W1W2W1_vec, mse_W1W2_vec, mse_W1_vec, mse_W2_vec], ...
-        {'kron','W1''W2W1','W1W2','W1 (cD6)','W2 (Haar)'});
-ylabel('MSE'); title(sprintf('Doppler: MSE Distributions , M = %d, SNR=%g', M, SNR));
+        {'Kron','W1''W2W1','W1W2','W1 (cD6)','W2 (Haar)'});
+ylabel('MSE');
+title(sprintf('Doppler: MSE Distributions, M = %d, SNR_{in} = %g dB', M, SNR_dB));
 
 colors = [0.6 0.2 0.9; 0.6 0.2 0.9; 0.6 0.2 0.9;  0.2 0.6 1.0; 0.2 0.6 1.0];
 boxes = findobj(gca,'Tag','Box');
@@ -135,4 +142,4 @@ for j = 1:length(boxes)
     patch(get(boxes(j),'XData'), get(boxes(j),'YData'), colors(length(boxes)-j+1,:), ...
         'FaceAlpha',0.5, 'EdgeColor','k');
 end
-
+set(gca, 'XColor', 'k', 'YColor', 'k', 'LineWidth', 1.5, 'Box', 'on', 'Layer', 'top');
