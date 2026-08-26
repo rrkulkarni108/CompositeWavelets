@@ -16,7 +16,7 @@ M      = 200;
 nl     = 3;                        % Bumps overridden to 1 below
 sigma  = 1;                        % noise sd, fixed
 lambda = sigma * sqrt(2*log(n));   % universal threshold
-SNRdB  = [-5 0 5];           % range of SNR dBs to empirically check different noise regimes
+SNRdB  = [-5 0 5 8.45];           % range of SNR dBs to empirically check different noise regimes
 
 signals = {'Doppler','Blocks','Bumps','HeaviSine'};
 
