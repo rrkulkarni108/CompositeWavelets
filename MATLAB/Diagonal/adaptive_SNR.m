@@ -1,13 +1,15 @@
 
-%% Adaptive case - many (M) number of simulations - using SNR
-% Comparison of single base wavelet matrix with adaptive method
+%% Diagonal block case - many (M) number of simulations - using SNR
+% Comparison of single base wavelet matrix with diagonal block (adaptive to the signal) method
 
 close all
 clear; clc;
 
 % User Defined Parameters 
 M = 200;  % number of simulations
-SNR = 5;  % can change to 3, 5, or 7 
+SNR_dB = 5;  % POWER ratio in dB: 10*log10(P_signal/P_noise),
+             % P_signal = ||s||^2/N, P_noise = sigma^2 = 1
+            
 
 
 % Storing MSE values
@@ -62,6 +64,9 @@ s4=sig;
 
 s_orig = [s1 0.2 * s2 0.1 * s3 0.2 * s4]; % combined signal
 
+% using the Power definition: P_signal = mean(s.^2), not var(s), scale to the target SNR
+s_orig = s_orig ./ sqrt(mean(s_orig.^2)) * sqrt(10^(SNR_dB/10));
+
 I1=zeros(n);
 for i=1:n1 
     I1(i,i)=1;
@@ -108,19 +113,15 @@ hfilt1 = [ -0.07576571478934  -0.02963552764595  ...
 
  W = W1 * I1 + W2 * I2 + W3 * I3 + W4 * I4;  % combine filters
 
+ lambda = sqrt(2 * log(n)); % Universal thresholding, noise ~ Normal(0,1)
+
  for m = 1:M 
-     % Add Gaussian noise with fixed SNR (user can set at beginning of file)
-     signal_var = var(s_orig);
-     signal_std = sqrt(signal_var);
-     s_orig= s_orig/signal_std * sqrt(SNR); % signal standardized to have unit variance, then scaled by sqrt(SNR)
-     s = s_orig + randn(size(s_orig)); % adds unit variance Gaussian noise
+     % Add Gaussian noise. 
+     s = s_orig + randn(size(s_orig)); % adds N(0,1) noise, so P_noise = 1
 
      %%  Adaptive Wavelet Shrinkage 
      wd = W * s'; % apply wavelet to noisy signal
 
-     n = length(s);
-     lambda = sqrt(2 * log(n)); % Universal thresholding, noise ~ Normal(0,1)
-    
      wd(abs(wd) < lambda) = 0;  % Hard thresholding
     
      sr = W' * wd; % reconstruct denoised signal
@@ -186,6 +187,7 @@ hfilt1 = [ -0.07576571478934  -0.02963552764595  ...
  avg_mse_W4 = mean(mse_W4_vec);
 
  % Print results
+ fprintf('\nCombined DJ signal, SNR = %g dB (power definition), M = %d\n\n', SNR_dB, M);
  fprintf('Average MSE (Adaptive): %.4f\n', avg_mse_adaptive);
  fprintf('Average MSE (W1 - Sym4):   %.4f\n', avg_mse_W1);
  fprintf('Average MSE (W2 - Haar):   %.4f\n', avg_mse_W2);
@@ -204,7 +206,7 @@ hfilt1 = [ -0.07576571478934  -0.02963552764595  ...
  boxplot([mse_adaptive_vec, mse_W1_vec, mse_W2_vec, mse_W3_vec, mse_W4_vec], ...
      {'Adaptive', 'Symmlet 4', 'Haar', 'DAUB 4', 'DAUB 3'});
  ylabel('MSE');
- title('MSE Distributions');
+ title(sprintf('MSE Distributions (SNR_{in} = %g dB)', SNR_dB));
 
 
 colors = [0.6 0.2 0.9;  0.2 0.6 1.0;  0.2 0.6 1.0; 0.2 0.6 1.0; 0.2 0.6 1.0];
@@ -213,6 +215,7 @@ for j = 1:length(boxes)
     patch(get(boxes(j),'XData'), get(boxes(j),'YData'), colors(length(boxes)-j+1,:), ...
         'FaceAlpha',0.5, 'EdgeColor','k');
 end
+set(gca, 'XColor', 'k', 'YColor', 'k', 'LineWidth', 1.5, 'Box', 'on', 'Layer', 'top');
 
 % Printing table in command window
 fprintf('| %-12s | %-10s | %-10s |\n', 'Method', 'Average MSE', 'Variance');
